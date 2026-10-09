@@ -30,31 +30,131 @@ import {
 } from './src/utils.js';
 
 let registered = false;
+let initialized = false;
+
+const PLUGIN_VERSION = '0.1.1';
 
 /**
  * activate 钩子（manifest.hooks.activate）。
  * 必须快速返回 —— 内核给它 5 秒超时。
+ *
+ * 幂等：顶层自启动与平台 hooks 可能先后各调一次，只有第一次生效。
  */
 export function init() {
+    if (initialized) {
+        logDebug('init 重复调用，已忽略');
+        return;
+    }
+    initialized = true;
+
+    // 这条日志不受调试开关控制 —— 它是排查「插件到底有没有加载」的第一手线索。
+    console.log(
+        `%c[${MODULE_NAME}]%c v${PLUGIN_VERSION} 初始化中…`,
+        'background:#7b53c1;color:#fff;padding:1px 4px;border-radius:3px',
+        'color:#7b53c1',
+    );
+
     const probe = probeCapabilities();
 
     if (!probe.ok) {
         if (!probe.ctx) {
-            logDebug('未检测到 Luker context，插件保持休眠');
+            console.warn(`[${MODULE_NAME}] 未检测到 Luker context —— 插件保持休眠（可能运行在原生 SillyTavern 或非 UI 环境）`);
         } else {
-            logWarn(
-                '当前环境缺少 Luker 消息接管能力，插件已禁用。缺失：',
+            console.warn(
+                `[${MODULE_NAME}] 当前环境缺少 Luker 消息接管能力，插件已禁用。缺失：`,
                 probe.missing.join('、'),
             );
         }
         scheduleSettingsPanel();
+        installDiagnostics();
         return;
     }
 
     registerTakeover();
+    installDiagnostics();
     scheduleSettingsPanel();
-    logDebug('插件已就绪');
+    console.log(`[${MODULE_NAME}] v${PLUGIN_VERSION} 已就绪`);
 }
+
+/**
+ * 注册全局诊断入口。
+ *
+ * 用户在浏览器控制台执行 `mmrpDiagnose()` 就能拿到完整的加载状态，
+ * 不用去猜「面板到底挂上没挂上」。报障时把返回值发过来即可。
+ */
+function installDiagnostics() {
+    globalThis.mmrpDiagnose = () => {
+        const $ = globalThis.jQuery;
+        const ctx = getLukerContext();
+        const probe = probeCapabilities();
+        const count = (selector) => {
+            if (!$) return 0;
+            try {
+                return $(selector).length;
+            } catch {
+                return 0;
+            }
+        };
+
+        const report = {
+            插件版本: PLUGIN_VERSION,
+            已初始化: initialized,
+            接管监听已注册: registered,
+            运行环境: ctx ? 'Luker（context 可用）' : '非 Luker / 无 context',
+            能力检测: probe.ok ? '通过' : `缺少：${probe.missing.join('、')}`,
+            设置面板DOM: count('#mmrp_settings_block') ? '已挂载（面板存在）' : '未找到（挂载失败）',
+            可用挂载容器: {
+                '#extensions_settings': count('#extensions_settings'),
+                '#extensions_settings2': count('#extensions_settings2'),
+                '.extensions_block': count('.extensions_block'),
+            },
+            当前设置: getSettings(),
+        };
+
+        console.log(`[${MODULE_NAME}] 诊断报告`, report);
+        if (report['设置面板DOM'].startsWith('未找到')) {
+            console.log(
+                `[${MODULE_NAME}] 提示：面板应位于左侧「扩展」抽屉（立方体图标）内，` +
+                '通常需要往下滚动。若容器计数均为 0，说明当前页面结构不匹配，请把本报告发回。',
+            );
+        }
+        return report;
+    };
+
+    console.log(`[${MODULE_NAME}] 可在控制台执行 mmrpDiagnose() 查看诊断信息`);
+}
+
+/**
+ * 顶层自启动（双保险）。
+ *
+ * 不依赖平台的 hooks 机制：模块被 import 时就把初始化排进 DOM ready 队列。
+ * 这样即使某个 Luker/SillyTavern 版本不读 manifest 的 hooks 字段，
+ * 面板与接管监听依然会正常建立。
+ */
+function scheduleAutoInit() {
+    const run = () => {
+        try {
+            init();
+        } catch (err) {
+            console.error(`[${MODULE_NAME}] 自启动失败`, err);
+        }
+    };
+
+    if (globalThis.jQuery) {
+        globalThis.jQuery(run);
+        return;
+    }
+    if (globalThis.document) {
+        if (globalThis.document.readyState === 'loading') {
+            globalThis.document.addEventListener('DOMContentLoaded', run, { once: true });
+        } else {
+            run();
+        }
+    }
+    // 无 DOM 的运行环境（单元测试）不自动初始化，由调用方显式调用 init()。
+}
+
+scheduleAutoInit();
 
 /** 面板挂载异步进行，不阻塞 activate 钩子。 */
 function scheduleSettingsPanel() {

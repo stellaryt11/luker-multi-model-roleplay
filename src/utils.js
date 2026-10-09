@@ -275,11 +275,24 @@ export function looksDegenerate(text, intensity) {
 export function notifyWarning(message) {
     try {
         if (globalThis.toastr?.warning) {
-            globalThis.toastr.warning(message, 'Multi-Model Roleplay', { timeOut: 4000 });
+            globalThis.toastr.warning(message, 'Multi-Model Roleplay', { timeOut: 6000 });
             return;
         }
     } catch {
         /* noop */
     }
     logWarn(message);
+}
+
+/** 信息提示（用于引导用户找到刚挂载的设置面板）。 */
+export function notifyInfo(message) {
+    try {
+        if (globalThis.toastr?.info) {
+            globalThis.toastr.info(message, 'Multi-Model Roleplay', { timeOut: 9000 });
+            return;
+        }
+    } catch {
+        /* noop */
+    }
+    logDebug(message);
 }

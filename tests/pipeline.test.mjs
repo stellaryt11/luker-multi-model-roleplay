@@ -437,3 +437,59 @@ test('impersonate / quiet 等类型不接管', async () => {
     assert.equal(payload.takeoverHandle, null, '不支持的生成类型不应接管');
     void mod;
 });
+
+// ── 11. 降级安全与自启动 ────────────────────────────────────────────────────
+
+test('缺少消息接管能力时安全禁用（模拟原生 SillyTavern），不抛错也不接管', async () => {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+    });
+    delete harness.ctx.createMessageEditorHandle;
+    delete harness.ctx.generateTaskStream;
+    delete harness.ctx.eventTypes.GENERATE_TAKEOVER_DISPATCH;
+    seedSettings(harness, makeSettings());
+
+    // 不应抛错
+    const mod = await loadPluginWithContext(harness.ctx);
+    assert.equal(typeof mod.init, 'function');
+
+    // 也不应接管（事件根本不会触发，但显式触发也应安全）
+    const payload = harness.dispatch({});
+    assert.equal(payload.takeoverHandle, null, '能力不足时不得声明接管');
+    assert.equal(harness.handles.length, 0);
+});
+
+test('init 幂等：重复调用不会重复注册监听', async () => {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+    });
+    seedSettings(harness, makeSettings());
+    const mod = await loadPluginWithContext(harness.ctx);
+
+    mod.init();
+    mod.init();
+
+    const payload = harness.dispatch({});
+    assert.ok(payload.takeoverHandle, '仍然要能正常工作');
+    assert.equal(harness.handles.length, 1, '重复 init 不应造成重复接管');
+
+    await harness.handles[0].complete;
+});
+
+test('mmrpDiagnose 可调用并返回关键状态', async () => {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+    });
+    seedSettings(harness, makeSettings());
+    await loadPluginWithContext(harness.ctx);
+
+    assert.equal(typeof globalThis.mmrpDiagnose, 'function', '应注册全局诊断入口');
+    const report = globalThis.mmrpDiagnose();
+
+    assert.equal(report['插件版本'], '0.1.1');
+    assert.equal(report['已初始化'], true);
+    assert.equal(report['接管监听已注册'], true);
+    assert.ok(String(report['能力检测']).includes('通过'), '能力检测应通过');
+    // 无 jQuery 的测试环境里不应误报成「已挂载」
+    assert.ok(String(report['设置面板DOM']).includes('未找到'), '无 DOM 时应如实报告');
+});

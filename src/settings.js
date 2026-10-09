@@ -11,6 +11,8 @@ import {
     getLukerContext,
     logDebug,
     logError,
+    notifyInfo,
+    notifyWarning,
     probeCapabilities,
     setDebugEnabled,
 } from './utils.js';
@@ -99,13 +101,6 @@ export function persistSettings() {
 // 设置面板
 // ---------------------------------------------------------------------------
 
-/**
- * 挂载设置面板。
- *
- * Luker 内部扩展用 #extensions_settings2，第三方扩展沿用 SillyTavern 传统
- * 的 #extensions_settings。这里做多容器回退：只要界面上还留有扩展设置区，
- * 面板就能出现在正确的位置，而不是因为一个 id 变动就彻底隐形。
- */
 export async function mountSettingsPanel() {
     if (!globalThis.jQuery) {
         // 非 UI 环境（测试 / 无 DOM）——不必报错
@@ -117,9 +112,11 @@ export async function mountSettingsPanel() {
         return; // 已挂载
     }
 
-    const host = findMountHost();
-    if (!host) {
-        logError('找不到扩展设置面板挂载点（已尝试 #extensions_settings、#extensions_settings2）');
+    const found = findMountHost();
+    if (!found) {
+        const message = '找不到扩展设置面板的挂载容器（已尝试 #extensions_settings、#extensions_settings2、.extensions_block）';
+        logError(message);
+        notifyWarning(`${message}，设置面板未能显示。`);
         return;
     }
 
@@ -127,25 +124,47 @@ export async function mountSettingsPanel() {
     let html;
     try {
         const response = await fetch(`${MODULE_FOLDER_URL}settings.html`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
         html = await response.text();
     } catch (err) {
-        logError('加载 settings.html 失败', err);
+        const message = `加载 settings.html 失败（${MODULE_FOLDER_URL}settings.html）：${err?.message ?? err}`;
+        logError(message);
+        notifyWarning(message);
         return;
     }
 
-    host.append(html);
+    found.host.append(html);
     renderProfileOptions(settings);
     bindSettingsInputs(settings);
     updateCapabilityNotice();
+
+    console.log(`[${MODULE_NAME}] 设置面板已挂载到 ${found.selector}`);
+    notifyInfo('设置面板已就绪 —— 在左侧「扩展」抽屉（立方体图标）里可以找到；找不到就往下滚动。');
 }
 
-/** 依次尝试已知的扩展设置容器。 */
+/**
+ * 依次尝试已知的扩展设置容器。
+ * Luker 的内部扩展用 #extensions_settings2，第三方扩展沿用 SillyTavern 的
+ * #extensions_settings；两者都在扩展抽屉里。
+ */
 function findMountHost() {
     const jq = globalThis.jQuery;
-    for (const selector of ['#extensions_settings', '#extensions_settings2']) {
-        const host = jq(selector);
-        if (host.length) {
-            return host;
+    const candidates = [
+        '#extensions_settings',
+        '#extensions_settings2',
+        '.extensions_block',
+        '#rm_extensions_block',
+    ];
+    for (const selector of candidates) {
+        try {
+            const host = jq(selector);
+            if (host.length) {
+                return { host, selector };
+            }
+        } catch (err) {
+            logDebug(`选择器 ${selector} 查询失败`, err);
         }
     }
     return null;
