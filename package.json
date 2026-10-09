@@ -4,6 +4,7 @@
     "private": true,
     "type": "module",
     "description": "Luker plugin: split one roleplay turn across multiple models (scene / character / integration / render).",
+    "author": "stellaryt11",
     "scripts": {
         "test": "node --test tests/pipeline.test.mjs"
     },

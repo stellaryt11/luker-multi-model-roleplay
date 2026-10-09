@@ -72,7 +72,7 @@
 2. 扩展 → **安装扩展**
 3. 粘贴本仓库地址：
    ```
-   https://github.com/<你的用户名>/luker-multi-model-roleplay
+   https://github.com/stellaryt11/luker-multi-model-roleplay
    ```
 4. 安装完成后在扩展面板里启用 **Multi-Model Roleplay**
 
@@ -198,7 +198,7 @@ Requires **Luker** (not vanilla SillyTavern — see compatibility below).
 2. Extensions → **Install extension**
 3. Paste this repository URL:
    ```
-   https://github.com/<your-name>/luker-multi-model-roleplay
+   https://github.com/stellaryt11/luker-multi-model-roleplay
    ```
 4. Enable **Multi-Model Roleplay** in the extensions panel
 

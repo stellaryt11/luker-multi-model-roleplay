@@ -5,9 +5,9 @@
     "optional": [],
     "js": "index.js",
     "css": "style.css",
-    "author": "sky",
+    "author": "stellaryt11",
     "version": "0.1.0",
-    "homePage": "https://github.com/",
+    "homePage": "https://github.com/stellaryt11/luker-multi-model-roleplay",
     "auto_update": true,
     "hooks": {
         "activate": "init"
