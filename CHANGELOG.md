@@ -38,3 +38,19 @@
 - 设置面板挂载失败/成功时会给出明确提示与 toastr 通知，避免「装了但找不到」。
 - 挂载容器查找扩展到 `.extensions_block` 与 `#rm_extensions_block` 兜底。
 - 新增 3 个测试：能力不足时安全禁用、init 幂等、诊断报告准确性。
+
+## [0.1.2] — 未发布
+
+### 修复
+
+- **设置面板 404（根因）**：`PLUGIN_ROOT_URL` 定义在 `src/utils.js` 里却直接使用
+  `import.meta.url` 的目录部分，得到的是 `<plugin>/src/` 而不是插件根目录，
+  导致请求变成 `.../multi-model-roleplay/src/settings.html` 而 404。
+  改为 `new URL('..', import.meta.url)` 上跳一级。常量同时更名为
+  `PLUGIN_ROOT_URL`（原名 `MODULE_FOLDER_URL` 有歧义，正是它掩盖了这个错误）。
+
+### 新增
+
+- 3 个资源路径回归测试：断言根目录 URL 不含 `/src/`、拼出的 `settings.html`
+  在磁盘上真实存在、`manifest.json` 引用的 js/css 均存在于根目录。
+  已验证过测试有效性（注入错误实现时 3 个用例全部失败）。

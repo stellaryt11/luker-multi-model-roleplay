@@ -11,11 +11,14 @@
 
 export const MODULE_NAME = 'multi-model-roleplay';
 
-/** 本模块的目录 URL，用于加载 settings.html（对子路径部署免疫）。 */
-export const MODULE_FOLDER_URL = (() => {
-    const url = import.meta.url;
-    return url.slice(0, url.lastIndexOf('/') + 1);
-})();
+/**
+ * 插件根目录 URL（结尾带 /），用于加载插件根目录下的资源。
+ *
+ * 注意：本文件位于 `<plugin>/src/`，所以必须从模块 URL **上跳一级**，
+ * 否则拼出来的路径会多出一层 `src/`，导致 settings.html 404。
+ * 这个坑踩过一次，下面有回归测试兜底。
+ */
+export const PLUGIN_ROOT_URL = new URL('..', import.meta.url).href;
 
 let debugEnabled = false;
 

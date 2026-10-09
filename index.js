@@ -32,7 +32,7 @@ import {
 let registered = false;
 let initialized = false;
 
-const PLUGIN_VERSION = '0.1.1';
+const PLUGIN_VERSION = '0.1.2';
 
 /**
  * activate 钩子（manifest.hooks.activate）。

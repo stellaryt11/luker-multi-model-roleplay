@@ -7,7 +7,7 @@
 
 import {
     MODULE_NAME,
-    MODULE_FOLDER_URL,
+    PLUGIN_ROOT_URL,
     getLukerContext,
     logDebug,
     logError,
@@ -123,13 +123,15 @@ export async function mountSettingsPanel() {
     const settings = getSettings();
     let html;
     try {
-        const response = await fetch(`${MODULE_FOLDER_URL}settings.html`);
+        const url = `${PLUGIN_ROOT_URL}settings.html`;
+        logDebug(`加载设置面板：${url}`);
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
         html = await response.text();
     } catch (err) {
-        const message = `加载 settings.html 失败（${MODULE_FOLDER_URL}settings.html）：${err?.message ?? err}`;
+        const message = `加载 settings.html 失败（${PLUGIN_ROOT_URL}settings.html）：${err?.message ?? err}`;
         logError(message);
         notifyWarning(message);
         return;

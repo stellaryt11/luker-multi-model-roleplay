@@ -476,6 +476,43 @@ test('init 幂等：重复调用不会重复注册监听', async () => {
     await harness.handles[0].complete;
 });
 
+// ── 12. 资源路径回归（曾经错过多一层 src/）──────────────────────────────
+
+test('回归：PLUGIN_ROOT_URL 不应包含 /src/ 层级', async () => {
+    const utils = await import('../src/utils.js');
+    const url = `${utils.PLUGIN_ROOT_URL}settings.html`;
+
+    assert.ok(!url.includes('/src/'), `资源路径不应包含 /src/，实际：${url}`);
+    assert.ok(url.endsWith('/settings.html'), `应以 settings.html 结尾，实际：${url}`);
+    assert.ok(utils.PLUGIN_ROOT_URL.endsWith('/'), `根目录 URL 应以 / 结尾，实际：${utils.PLUGIN_ROOT_URL}`);
+});
+
+test('回归：PLUGIN_ROOT_URL 拼出的 settings.html 在磁盘上真实存在', async () => {
+    const utils = await import('../src/utils.js');
+    const { fileURLToPath } = await import('node:url');
+    const { existsSync } = await import('node:fs');
+
+    const resolved = fileURLToPath(new URL('settings.html', utils.PLUGIN_ROOT_URL));
+    assert.ok(
+        existsSync(resolved),
+        `settings.html 应能从插件根目录解析到，实际解析为：${resolved}`,
+    );
+});
+
+test('回归：manifest 引用的 js/css 也都存在于根目录', async () => {
+    const utils = await import('../src/utils.js');
+    const { fileURLToPath } = await import('node:url');
+    const { existsSync, readFileSync } = await import('node:fs');
+
+    const manifestPath = fileURLToPath(new URL('manifest.json', utils.PLUGIN_ROOT_URL));
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+
+    for (const file of [manifest.js, manifest.css].filter(Boolean)) {
+        const resolved = fileURLToPath(new URL(file, utils.PLUGIN_ROOT_URL));
+        assert.ok(existsSync(resolved), `manifest 引用的 ${file} 不存在：${resolved}`);
+    }
+});
+
 test('mmrpDiagnose 可调用并返回关键状态', async () => {
     const harness = createMockContext({
         responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
@@ -486,7 +523,7 @@ test('mmrpDiagnose 可调用并返回关键状态', async () => {
     assert.equal(typeof globalThis.mmrpDiagnose, 'function', '应注册全局诊断入口');
     const report = globalThis.mmrpDiagnose();
 
-    assert.equal(report['插件版本'], '0.1.1');
+    assert.equal(report['插件版本'], '0.1.2');
     assert.equal(report['已初始化'], true);
     assert.equal(report['接管监听已注册'], true);
     assert.ok(String(report['能力检测']).includes('通过'), '能力检测应通过');
