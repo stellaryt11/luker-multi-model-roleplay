@@ -101,22 +101,26 @@ export function persistSettings() {
 
 /**
  * 挂载设置面板。
- * 挂载点是 Luker 的 #extensions_settings（第三方扩展区），
- * 与核心扩展用的 #extensions_settings2 区分开。
+ *
+ * Luker 内部扩展用 #extensions_settings2，第三方扩展沿用 SillyTavern 传统
+ * 的 #extensions_settings。这里做多容器回退：只要界面上还留有扩展设置区，
+ * 面板就能出现在正确的位置，而不是因为一个 id 变动就彻底隐形。
  */
 export async function mountSettingsPanel() {
-    const host = globalThis.jQuery?.('#extensions_settings');
     if (!globalThis.jQuery) {
         // 非 UI 环境（测试 / 无 DOM）——不必报错
         logDebug('无 jQuery，跳过设置面板挂载');
         return;
     }
-    if (!host?.length) {
-        logError('找不到设置面板挂载点 #extensions_settings');
-        return;
-    }
+
     if (globalThis.jQuery('#mmrp_settings_block').length) {
         return; // 已挂载
+    }
+
+    const host = findMountHost();
+    if (!host) {
+        logError('找不到扩展设置面板挂载点（已尝试 #extensions_settings、#extensions_settings2）');
+        return;
     }
 
     const settings = getSettings();
@@ -133,6 +137,18 @@ export async function mountSettingsPanel() {
     renderProfileOptions(settings);
     bindSettingsInputs(settings);
     updateCapabilityNotice();
+}
+
+/** 依次尝试已知的扩展设置容器。 */
+function findMountHost() {
+    const jq = globalThis.jQuery;
+    for (const selector of ['#extensions_settings', '#extensions_settings2']) {
+        const host = jq(selector);
+        if (host.length) {
+            return host;
+        }
+    }
+    return null;
 }
 
 /** 用当前可用的 Connection Profile 填充各个下拉框。 */
