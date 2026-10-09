@@ -1,0 +1,11 @@
+{
+    "name": "luker-multi-model-roleplay",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Luker plugin: split one roleplay turn across multiple models (scene / character / integration / render).",
+    "scripts": {
+        "test": "node --test tests/pipeline.test.mjs"
+    },
+    "license": "MIT"
+}

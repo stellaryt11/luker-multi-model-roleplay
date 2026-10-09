@@ -1,0 +1,160 @@
+<div id="mmrp_settings_block" class="mmrp-settings" data-extension-name="multi-model-roleplay">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Multi-Model Roleplay</b>
+            <small class="mmrp-header-hint">多模型协作 · 场景 / 人物 / 整合 / 渲染</small>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+
+            <div id="mmrp_capability_notice" class="mmrp-notice displayNone"></div>
+
+            <label class="checkbox_label mmrp-row">
+                <input type="checkbox" data-setting="enabled">
+                <span>启用插件（<b>启用后本回合正文由本插件产出，主 LLM 不被调用</b>）</span>
+            </label>
+
+            <label class="checkbox_label mmrp-row">
+                <input type="checkbox" data-setting="debug">
+                <span>调试日志（输出到控制台）</span>
+            </label>
+
+            <div class="mmrp-section">
+                <div class="mmrp-section-title">① 场景层 · 世界的事实</div>
+                <div class="mmrp-hint">只输出世界事实，不看角色卡。建议用便宜、逻辑强、长上下文的模型。</div>
+                <div class="mmrp-grid">
+                    <label>API 连接配置
+                        <select class="text_pole mmrp-profile-select" data-setting="sceneApiProfile"></select>
+                    </label>
+                    <label>Chat 补全预设（可留空）
+                        <input type="text" class="text_pole" data-setting="scenePreset" placeholder="例如：low-temp">
+                    </label>
+                </div>
+            </div>
+
+            <div class="mmrp-section">
+                <div class="mmrp-section-title">② 人物层 · 角色的意志</div>
+                <div class="mmrp-hint">持有角色卡与 NSFW 强度判定权。建议用最擅长扮演的模型。</div>
+                <div class="mmrp-grid">
+                    <label>API 连接配置
+                        <select class="text_pole mmrp-profile-select" data-setting="actorApiProfile"></select>
+                    </label>
+                    <label>Chat 补全预设（可留空）
+                        <input type="text" class="text_pole" data-setting="actorPreset" placeholder="例如：rp-main">
+                    </label>
+                </div>
+            </div>
+
+            <div class="mmrp-section">
+                <div class="mmrp-section-title">③ 整合层 · 文本的形态</div>
+                <div class="mmrp-hint">仲裁冲突、产出渲染指令，不写正文。</div>
+                <div class="mmrp-grid">
+                    <label>API 连接配置
+                        <select class="text_pole mmrp-profile-select" data-setting="mergeApiProfile"></select>
+                    </label>
+                    <label>Chat 补全预设（可留空）
+                        <input type="text" class="text_pole" data-setting="mergePreset" placeholder="例如：struct-json">
+                    </label>
+                </div>
+            </div>
+
+            <div class="mmrp-section">
+                <div class="mmrp-section-title">④ 渲染层 · 唯一的正文作者</div>
+                <div class="mmrp-hint">
+                    低强度（日常）与高强度（亲密/成人）分档路由。<b>强度路由按回合生效</b>——
+                    本回合最高强度决定整条消息由哪个渲染器执笔，以保证一条消息内笔触统一。
+                </div>
+                <div class="mmrp-grid">
+                    <label>低强度渲染 · API 连接配置
+                        <select class="text_pole mmrp-profile-select" data-setting="renderLightApiProfile"></select>
+                    </label>
+                    <label>低强度 · 预设
+                        <input type="text" class="text_pole" data-setting="renderLightPreset" placeholder="可留空">
+                    </label>
+                    <label>高强度渲染 · API 连接配置
+                        <select class="text_pole mmrp-profile-select" data-setting="renderHeavyApiProfile"></select>
+                    </label>
+                    <label>高强度 · 预设
+                        <input type="text" class="text_pole" data-setting="renderHeavyPreset" placeholder="可留空">
+                    </label>
+                </div>
+                <div class="mmrp-grid">
+                    <label>强度阈值（≥ 该值走高强度渲染器）
+                        <input type="number" class="text_pole" data-setting="nsfwThreshold" min="0" max="3" step="1">
+                    </label>
+                    <label class="checkbox_label mmrp-inline-check">
+                        <input type="checkbox" data-setting="heavyFallbackToLight">
+                        <span>高强度渲染器未配置时回退到低强度</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mmrp-section">
+                <div class="mmrp-section-title">上下文与健壮性</div>
+                <div class="mmrp-grid">
+                    <label>送入上下文的最近消息条数
+                        <input type="number" class="text_pole" data-setting="recentMessageCount" min="1" max="60" step="1">
+                    </label>
+                    <label>文风锚长度（字符）
+                        <input type="number" class="text_pole" data-setting="styleAnchorChars" min="0" max="4000" step="50">
+                    </label>
+                    <label>请求超时（毫秒，0 = 不限）
+                        <input type="number" class="text_pole" data-setting="requestTimeoutMs" min="0" step="10000">
+                    </label>
+                    <label>与其它接管者冲突时
+                        <select class="text_pole" data-setting="conflictPolicy">
+                            <option value="yield">让出本回合（推荐）</option>
+                            <option value="claim">抢占本回合</option>
+                        </select>
+                    </label>
+                </div>
+                <label class="checkbox_label mmrp-row">
+                    <input type="checkbox" data-setting="styleAnchorEnabled">
+                    <span>启用文风锚（把上一回合结尾喂给渲染器，减少笔触突变）</span>
+                </label>
+                <label class="checkbox_label mmrp-row">
+                    <input type="checkbox" data-setting="showProgress">
+                    <span>准备阶段显示进度占位（正在构建场景…）</span>
+                </label>
+                <label class="checkbox_label mmrp-row">
+                    <input type="checkbox" data-setting="retryOnDegenerate">
+                    <span>渲染结果疑似被网关阉割时自动重试一次</span>
+                </label>
+            </div>
+
+            <div class="mmrp-section">
+                <div class="mmrp-section-title">提示词覆盖（留空则使用内置默认）</div>
+                <div class="mmrp-hint">
+                    仅覆盖 System Prompt。修改前建议先看 README 的分工原则——越界的提示词会重新引入话语权争夺。
+                </div>
+                <label>场景层 System
+                    <textarea class="text_pole mmrp-textarea" data-setting="sceneSystemOverride" rows="3"></textarea>
+                </label>
+                <label>人物层 System
+                    <textarea class="text_pole mmrp-textarea" data-setting="actorSystemOverride" rows="3"></textarea>
+                </label>
+                <label>整合层 System
+                    <textarea class="text_pole mmrp-textarea" data-setting="mergeSystemOverride" rows="3"></textarea>
+                </label>
+                <label>低强度渲染 System
+                    <textarea class="text_pole mmrp-textarea" data-setting="renderLightSystemOverride" rows="3"></textarea>
+                </label>
+                <label>高强度渲染 System
+                    <textarea class="text_pole mmrp-textarea" data-setting="renderHeavySystemOverride" rows="3"></textarea>
+                </label>
+            </div>
+
+            <div class="mmrp-actions">
+                <div id="mmrp_refresh_profiles" class="menu_button menu_button_icon">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>刷新连接配置列表</span>
+                </div>
+            </div>
+
+            <div class="mmrp-footnote">
+                本插件会把聊天内容分别发送给你配置的多个 API 服务商，数据外发量比单模型模式更多，请自行确认各服务商的隐私条款。
+            </div>
+
+        </div>
+    </div>
+</div>

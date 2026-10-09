@@ -1,0 +1,94 @@
+/* SPDX-License-Identifier: MIT
+ * Multi-Model Roleplay —— 设置面板样式
+ * 全部使用 Luker / SillyTavern 的主题变量，自动跟随明暗主题。
+ */
+
+.mmrp-settings {
+    --mmrp-gap: 8px;
+}
+
+.mmrp-settings .mmrp-header-hint {
+    opacity: 0.6;
+    margin-left: 0.5em;
+    font-weight: normal;
+}
+
+.mmrp-settings .mmrp-section {
+    margin: 12px 0;
+    padding: 8px 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+}
+
+.mmrp-settings .mmrp-section-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.mmrp-settings .mmrp-hint {
+    opacity: 0.7;
+    font-size: 0.85em;
+    line-height: 1.45;
+    margin-bottom: var(--mmrp-gap);
+}
+
+.mmrp-settings .mmrp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--mmrp-gap);
+}
+
+.mmrp-settings .mmrp-grid > label,
+.mmrp-settings .mmrp-section > label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.9em;
+}
+
+.mmrp-settings .mmrp-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 0.9em;
+}
+
+.mmrp-settings .mmrp-inline-check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.mmrp-settings .mmrp-textarea {
+    width: 100%;
+    resize: vertical;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.85em;
+}
+
+.mmrp-settings .mmrp-notice {
+    margin: 8px 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--warningColor, #b58b00);
+    background: color-mix(in srgb, var(--warningColor, #b58b00) 12%, transparent);
+    font-size: 0.88em;
+    line-height: 1.5;
+}
+
+.mmrp-settings .mmrp-actions {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.mmrp-settings .mmrp-footnote {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--SmartThemeBorderColor);
+    opacity: 0.65;
+    font-size: 0.8em;
+    line-height: 1.5;
+}
