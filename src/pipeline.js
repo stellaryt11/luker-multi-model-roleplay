@@ -87,27 +87,37 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
     // ── ① 场景层：世界的事实 ─────────────────────────────────────────────
     setProgress('*正在构建场景事实…*');
     const sceneStart = now();
-    const sceneResult = await callLayer(ctx, {
-        settings,
-        abortSignal: eventData.abortSignal,
-        timeoutMs: settings.requestTimeoutMs,
-        apiPresetName: settings.sceneApiProfile,
-        llmPresetName: resolvePrepPresetName(settings, settings.scenePreset),
-        systemPrompt: settings.sceneSystemOverride || SCENE_SYSTEM,
-        taskTemplate: SCENE_TASK,
-        values: { recent_chat: recentChat, last_user: lastUser },
-        jsonSchema: settings.useJsonSchema === false ? null : wrapJsonSchema('scene_fact_card', SCENE_SCHEMA),
-        includeCharacterCard: false,
-        worldInfoSource: 'chat',
-        label: '场景层',
-    });
-    timings.scene = now() - sceneStart;
+    let sceneText;
+    try {
+        const sceneResult = await callLayer(ctx, {
+            settings,
+            abortSignal: eventData.abortSignal,
+            timeoutMs: settings.requestTimeoutMs,
+            apiPresetName: settings.sceneApiProfile,
+            llmPresetName: resolvePrepPresetName(settings, settings.scenePreset),
+            systemPrompt: settings.sceneSystemOverride || SCENE_SYSTEM,
+            taskTemplate: SCENE_TASK,
+            values: { recent_chat: recentChat, last_user: lastUser },
+            jsonSchema: settings.useJsonSchema === false ? null : wrapJsonSchema('scene_fact_card', SCENE_SCHEMA),
+            includeCharacterCard: false,
+            worldInfoSource: 'chat',
+            label: '场景层',
+        });
 
-    const sceneCard = extractJson(sceneResult.assistantText);
-    if (!sceneCard) {
-        logWarn('场景层未返回可解析 JSON，使用降级文本传递');
+        const sceneCard = extractJson(sceneResult.assistantText);
+        if (!sceneCard) {
+            logWarn('场景层未返回可解析 JSON，使用降级文本传递');
+        }
+        sceneText = sceneCard ? renderSceneCard(sceneCard) : clampText(sceneResult.assistantText, 1500);
+    } catch (err) {
+        if (isAbort(err, eventData.abortSignal) || !settings.continueOnPrepLayerFailure) {
+            throw err;
+        }
+        logWarn(`场景层失败，按设置降级继续：${String(err?.message ?? err).slice(0, 200)}`);
+        sceneText = '（本回合没有可用的场景事实卡。请不要引入新的环境、天气或道具，只依据对话中已出现过的信息推进。）';
+    } finally {
+        timings.scene = now() - sceneStart;
     }
-    const sceneText = sceneCard ? renderSceneCard(sceneCard) : clampText(sceneResult.assistantText, 1500);
 
     // ── ② 人物层：角色的意志 ─────────────────────────────────────────────
     setProgress('*正在裁决角色反应…*');
@@ -137,42 +147,54 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
     // 强度判定权属于人物层（它持有角色意志）。缺值时保守取 0。
     const rawIntensity = Number(actorCard?.nsfw_intensity ?? 0);
     const actorIntensity = Number.isFinite(rawIntensity) ? Math.min(3, Math.max(0, Math.round(rawIntensity))) : 0;
+    let planIntensity = actorIntensity;
 
     // ── ③ 整合层：文本的形态 ─────────────────────────────────────────────
     setProgress('*正在整合渲染指令…*');
     const mergeStart = now();
-    const mergeResult = await callLayer(ctx, {
-        settings,
-        abortSignal: eventData.abortSignal,
-        timeoutMs: settings.requestTimeoutMs,
-        apiPresetName: settings.mergeApiProfile,
-        llmPresetName: resolvePrepPresetName(settings, settings.mergePreset),
-        systemPrompt: settings.mergeSystemOverride || MERGE_SYSTEM,
-        taskTemplate: MERGE_TASK,
-        values: {
-            scene_card: sceneText,
-            actor_card: actorText,
-            recent_chat: recentChat,
-            last_user: lastUser,
-            style_anchor: styleAnchor || '（本次没有可用的上文，正常开篇）',
-        },
-        jsonSchema: settings.useJsonSchema === false ? null : wrapJsonSchema('render_plan', MERGE_SCHEMA),
-        includeCharacterCard: false,
-        worldInfoSource: 'none',
-        label: '整合层',
-    });
-    timings.merge = now() - mergeStart;
+    let planText;
+    try {
+        const mergeResult = await callLayer(ctx, {
+            settings,
+            abortSignal: eventData.abortSignal,
+            timeoutMs: settings.requestTimeoutMs,
+            apiPresetName: settings.mergeApiProfile,
+            llmPresetName: resolvePrepPresetName(settings, settings.mergePreset),
+            systemPrompt: settings.mergeSystemOverride || MERGE_SYSTEM,
+            taskTemplate: MERGE_TASK,
+            values: {
+                scene_card: sceneText,
+                actor_card: actorText,
+                recent_chat: recentChat,
+                last_user: lastUser,
+                style_anchor: styleAnchor || '（本次没有可用的上文，正常开篇）',
+            },
+            jsonSchema: settings.useJsonSchema === false ? null : wrapJsonSchema('render_plan', MERGE_SCHEMA),
+            includeCharacterCard: false,
+            worldInfoSource: 'none',
+            label: '整合层',
+        });
 
-    const renderPlan = extractJson(mergeResult.assistantText);
-    // 整合层只允许沿用或下调强度，绝不上调。
-    const planIntensityRaw = Number(renderPlan?.nsfw_intensity ?? actorIntensity);
-    const planIntensity = Number.isFinite(planIntensityRaw)
-        ? Math.min(actorIntensity, Math.max(0, Math.round(planIntensityRaw)))
-        : actorIntensity;
+        const renderPlan = extractJson(mergeResult.assistantText);
+        // 整合层只允许沿用或下调强度，绝不上调。
+        const planIntensityRaw = Number(renderPlan?.nsfw_intensity ?? actorIntensity);
+        planIntensity = Number.isFinite(planIntensityRaw)
+            ? Math.min(actorIntensity, Math.max(0, Math.round(planIntensityRaw)))
+            : actorIntensity;
 
-    const planText = renderPlan
-        ? renderRenderPlan({ ...renderPlan, nsfw_intensity: planIntensity })
-        : clampText(mergeResult.assistantText, 2000);
+        planText = renderPlan
+            ? renderRenderPlan({ ...renderPlan, nsfw_intensity: planIntensity })
+            : clampText(mergeResult.assistantText, 2000);
+    } catch (err) {
+        if (isAbort(err, eventData.abortSignal) || !settings.continueOnPrepLayerFailure) {
+            throw err;
+        }
+        logWarn(`整合层失败，按设置降级继续：${String(err?.message ?? err).slice(0, 200)}`);
+        // 直接用前两层的原始产出当施工图，强度沿用人物层判定
+        planText = `【场景事实卡】\n${sceneText}\n\n【角色意志】\n${actorText}\n\n（整合层不可用，请直接按上述内容成文）`;
+    } finally {
+        timings.merge = now() - mergeStart;
+    }
 
     // ── 强度路由（按回合）────────────────────────────────────────────────
     const threshold = Number(settings.nsfwThreshold) || 2;
@@ -407,6 +429,12 @@ async function callLayer(ctx, params) {
             });
             return result ?? { assistantText: '' };
         }
+    } catch (err) {
+        // 标记失败层：上层据此生成「哪一层、出了什么问题」的提示
+        if (err && typeof err === 'object' && !err.mmrpLayer) {
+            err.mmrpLayer = label;
+        }
+        throw err;
     } finally {
         cleanup();
     }

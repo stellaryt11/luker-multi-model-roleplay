@@ -150,6 +150,17 @@
                     <span>渲染结果疑似被网关阉割时自动重试一次</span>
                 </label>
                 <label class="checkbox_label mmrp-row">
+                    <input type="checkbox" data-setting="continueOnPrepLayerFailure">
+                    <span>
+                        准备层失败时降级继续（默认关闭）<br>
+                        <span class="mmrp-subhint">
+                            关闭：任一层失败则整个回合回滚（宁可什么都不出）。<br>
+                            开启：场景层失败时用「无场景卡」继续，整合层失败时直接用
+                            前两层产出当施工图。人物层与渲染层失败仍会中止。
+                        </span>
+                    </span>
+                </label>
+                <label class="checkbox_label mmrp-row">
                     <input type="checkbox" data-setting="useJsonSchema">
                     <span>
                         向端点请求结构化输出（response_format.json_schema）<br>

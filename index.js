@@ -16,6 +16,7 @@
  */
 
 import { runPipeline, isAbort } from './src/pipeline.js';
+import { formatFailure } from './src/errors.js';
 import { ensurePurePresetRegistered, isPurePresetReady } from './src/pure-preset.js';
 import { getSettings, mountSettingsPanel } from './src/settings.js';
 import {
@@ -33,7 +34,7 @@ import {
 let registered = false;
 let initialized = false;
 
-const PLUGIN_VERSION = '0.2.2';
+const PLUGIN_VERSION = '0.2.3';
 
 /**
  * activate 钩子（manifest.hooks.activate）。
@@ -274,9 +275,9 @@ async function drivePipeline({ ctx, eventData, handle, settings, generationType 
             return;
         }
 
-        logError('流水线失败，回滚本回合', err);
-        const message = String(err?.message ?? err ?? '未知错误');
-        notifyWarning(`多模型流水线失败，已回滚本回合：${message}`);
+        const description = formatFailure(err);
+        logError(`流水线失败，回滚本回合 —— ${description}`, err);
+        notifyWarning(`多模型流水线失败：${description}`);
         try {
             // 没有可用 partial 的硬失败 → 恢复 slot 原状
             await handle.discard();

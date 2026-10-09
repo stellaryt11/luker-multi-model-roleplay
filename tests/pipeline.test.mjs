@@ -524,7 +524,7 @@ test('mmrpDiagnose 可调用并返回关键状态', async () => {
     assert.equal(typeof globalThis.mmrpDiagnose, 'function', '应注册全局诊断入口');
     const report = globalThis.mmrpDiagnose();
 
-    assert.equal(report['插件版本'], '0.2.2');
+    assert.equal(report['插件版本'], '0.2.3');
     assert.equal(report['已初始化'], true);
     assert.equal(report['接管监听已注册'], true);
     assert.ok(String(report['能力检测']).includes('通过'), '能力检测应通过');
@@ -754,4 +754,84 @@ test('looksLikeSchemaUnsupported 的判定边界', async () => {
     assert.ok(!looksLikeSchemaUnsupported(new Error('403 Forbidden')));
     assert.ok(!looksLikeSchemaUnsupported(new Error('mock failure in actor')));
     assert.ok(!looksLikeSchemaUnsupported(null));
+});
+
+// ── 16. 准备层失败时的降级继续（可选）───────────────────────────────────────
+
+test('默认关闭降级继续：场景层失败仍回滚整个回合', async () => {
+    const harness = createMockContext({ failOn: 'scene' });
+    seedSettings(harness, makeSettings());
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    const settled = await handle.complete;
+
+    assert.equal(settled.status, 'discarded', '默认应保守回滚');
+    assert.equal(harness.calls.actor.length, 0, '不应继续往下跑');
+});
+
+test('开启降级继续：场景层失败后用无场景卡继续出正文', async () => {
+    const harness = createMockContext({
+        responses: { actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+        failOn: 'scene',
+    });
+    seedSettings(harness, makeSettings({ continueOnPrepLayerFailure: true }));
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    const settled = await handle.complete;
+
+    assert.equal(settled.status, 'committed', '应降级完成而不是回滚');
+    assert.equal(harness.calls.actor.length, 1, '应继续跑到人物层');
+    assert.ok(settled.finalText.includes('回来了'), '应产出正文');
+
+    // 人物层拿到的场景卡应是明确的降级说明，而不是空字符串
+    const actorPrompt = harness.calls.actor[0].taskMessages[1].content;
+    assert.match(actorPrompt, /没有可用的场景事实卡/, '应给出明确的降级提示');
+});
+
+test('开启降级继续：整合层失败时直接用前两层产出当施工图', async () => {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), render: LONG_PROSE },
+        failOn: 'merge',
+    });
+    seedSettings(harness, makeSettings({ continueOnPrepLayerFailure: true }));
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    const settled = await handle.complete;
+
+    assert.equal(settled.status, 'committed');
+    assert.equal(harness.calls.render.length, 1, '仍应走到渲染层');
+
+    const renderPrompt = harness.calls.render[0].taskMessages[1].content;
+    assert.match(renderPrompt, /整合层不可用/, '施工图里应说明整合层不可用');
+    assert.match(renderPrompt, /场景事实卡|角色意志/, '应把前两层产出带上兜底');
+});
+
+test('人物层失败即使开启降级也会中止（没有角色就没有这一回合）', async () => {
+    const harness = createMockContext({ failOn: 'actor' });
+    seedSettings(harness, makeSettings({ continueOnPrepLayerFailure: true }));
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    const settled = await handle.complete;
+
+    assert.equal(settled.status, 'discarded', '人物层是必需的，不能降级');
+});
+
+test('失败时会给错误带上层名，便于定位', async () => {
+    const harness = createMockContext({ failOn: 'actor' });
+    seedSettings(harness, makeSettings());
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    await handle.complete;
+
+    // 直接从 pipeline 抛出的路径验证标记逻辑
+    const { describeFailure } = await import('../src/errors.js');
+    const fake = Object.assign(new Error('Got response status 401'), { mmrpLayer: '人物层' });
+    const described = describeFailure(fake);
+    assert.equal(described.layer, '人物层');
+    assert.match(described.title, /鉴权失败/);
 });
