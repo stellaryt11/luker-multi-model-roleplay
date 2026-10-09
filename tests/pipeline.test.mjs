@@ -524,7 +524,7 @@ test('mmrpDiagnose 可调用并返回关键状态', async () => {
     assert.equal(typeof globalThis.mmrpDiagnose, 'function', '应注册全局诊断入口');
     const report = globalThis.mmrpDiagnose();
 
-    assert.equal(report['插件版本'], '0.2.1');
+    assert.equal(report['插件版本'], '0.2.2');
     assert.equal(report['已初始化'], true);
     assert.equal(report['接管监听已注册'], true);
     assert.ok(String(report['能力检测']).includes('通过'), '能力检测应通过');
@@ -697,4 +697,61 @@ test('非 schema 类错误不会触发降级重试（避免白重试）', async 
 
     assert.equal(settled.status, 'discarded', '普通失败应回滚');
     assert.equal(harness.calls.scene.length, 1, '不应重试');
+});
+
+// ── 15. 响应阶段的结构化输出降级 ────────────────────────────────────────────
+
+test('响应形状不被识别（json_schema_violation）时也降级重试', async () => {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+        schemaViolationOn: 'scene',
+    });
+    seedSettings(harness, makeSettings());
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    const settled = await handle.complete;
+
+    assert.equal(settled.status, 'committed', '降级后仍应完成回合');
+    assert.equal(harness.calls.scene.length, 2, '应重试一次');
+    assert.ok(harness.calls.scene[0].jsonSchema, '第一次带结构约束');
+    assert.equal(harness.calls.scene[1].jsonSchema, undefined, '降级后不带');
+});
+
+test('关闭 useJsonSchema 后完全不请求结构化输出', async () => {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+    });
+    seedSettings(harness, makeSettings({ useJsonSchema: false }));
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    await handle.complete;
+
+    assert.equal(harness.calls.scene[0].jsonSchema, undefined, '应完全不传');
+    assert.equal(harness.calls.actor[0].jsonSchema, undefined);
+    assert.equal(harness.calls.merge[0].jsonSchema, undefined);
+    // 上游返回的仍是 JSON 文本，extractJson 能兜住
+    assert.equal(harness.handles[0]._state.status, 'committed');
+});
+
+test('looksLikeSchemaUnsupported 的判定边界', async () => {
+    const { looksLikeSchemaUnsupported } = await import('../src/pipeline.js');
+
+    // 请求阶段：端点不认 response_format
+    assert.ok(looksLikeSchemaUnsupported(
+        new Error('Got response status 400: {"error":{"message":"response_format.json_schema.schema is required"}}'),
+    ));
+
+    // 响应阶段：形状不被识别（靠错误码判定，不依赖措辞）
+    const violation = new Error('something entirely different');
+    violation.code = 'json_schema_violation';
+    assert.ok(looksLikeSchemaUnsupported(violation), '错误码应优先于文案');
+
+    // 不该被误判为可降级
+    assert.ok(!looksLikeSchemaUnsupported(new Error('429 Too Many Requests')));
+    assert.ok(!looksLikeSchemaUnsupported(new Error('401 Unauthorized')));
+    assert.ok(!looksLikeSchemaUnsupported(new Error('403 Forbidden')));
+    assert.ok(!looksLikeSchemaUnsupported(new Error('mock failure in actor')));
+    assert.ok(!looksLikeSchemaUnsupported(null));
 });

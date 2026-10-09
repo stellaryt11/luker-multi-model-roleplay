@@ -93,6 +93,7 @@ export function createMockContext(config = {}) {
     const renderSequence = config.renderSequence ?? null;
     let renderCallIndex = 0;
     const schemaErrorCount = {};
+    const violationCount = {};
 
     function identify(systemPrompt) {
         const text = String(systemPrompt ?? '');
@@ -128,6 +129,12 @@ export function createMockContext(config = {}) {
             throw new Error(
                 'Got response status 400 from : {"error":{"message":"response_format.json_schema.schema is required"}}',
             );
+        }
+        // 模拟「响应形状不是 Luker 能拆的两种」：请求成功但报 json_schema_violation
+        if (config.schemaViolationOn === kind && (violationCount[kind] = (violationCount[kind] ?? 0) + 1) === 1) {
+            const err = new Error('jsonSchema response: unrecognized shape (expected string or chat-completion object)');
+            err.code = 'json_schema_violation';
+            throw err;
         }
 
         const payload = resolvePayload(kind);

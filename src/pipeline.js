@@ -96,7 +96,7 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
         systemPrompt: settings.sceneSystemOverride || SCENE_SYSTEM,
         taskTemplate: SCENE_TASK,
         values: { recent_chat: recentChat, last_user: lastUser },
-        jsonSchema: wrapJsonSchema('scene_fact_card', SCENE_SCHEMA),
+        jsonSchema: settings.useJsonSchema === false ? null : wrapJsonSchema('scene_fact_card', SCENE_SCHEMA),
         includeCharacterCard: false,
         worldInfoSource: 'chat',
         label: '场景层',
@@ -121,7 +121,7 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
         systemPrompt: settings.actorSystemOverride || ACTOR_SYSTEM,
         taskTemplate: ACTOR_TASK,
         values: { scene_card: sceneText, recent_chat: recentChat, last_user: lastUser },
-        jsonSchema: wrapJsonSchema('character_will', ACTOR_SCHEMA),
+        jsonSchema: settings.useJsonSchema === false ? null : wrapJsonSchema('character_will', ACTOR_SCHEMA),
         includeCharacterCard: true,
         worldInfoSource: 'chat',
         label: '人物层',
@@ -156,7 +156,7 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
             last_user: lastUser,
             style_anchor: styleAnchor || '（本次没有可用的上文，正常开篇）',
         },
-        jsonSchema: wrapJsonSchema('render_plan', MERGE_SCHEMA),
+        jsonSchema: settings.useJsonSchema === false ? null : wrapJsonSchema('render_plan', MERGE_SCHEMA),
         includeCharacterCard: false,
         worldInfoSource: 'none',
         label: '整合层',
@@ -393,7 +393,11 @@ async function callLayer(ctx, params) {
                 throw err;
             }
 
-            logWarn(`${label} 的端点不支持 jsonSchema，去掉结构约束重试一次`);
+            logWarn(
+                `${label} 的结构化输出不可用`
+                + `（${err?.code || 'unknown'}：${String(err?.message ?? '').slice(0, 160)}）`,
+                '→ 去掉结构约束重试一次',
+            );
             const fallbackRequest = { ...request };
             delete fallbackRequest.jsonSchema;
 
@@ -448,20 +452,33 @@ export function isAbort(err, abortSignal) {
 }
 
 /**
- * 判断错误是否指向「端点不支持结构化输出」。
+ * 判断错误是否指向「结构化输出不可用」。
  *
- * 上游的报错措辞各式各样，这里只认与 schema / response_format 直接相关的
- * 关键词，避免把普通的限流、鉴权失败误判成可降级错误而白白重试。
+ * 两大类：
+ *   1. 请求阶段：端点不认 response_format —— 典型报错
+ *      `response_format.json_schema.schema is required`（400）
+ *   2. 响应阶段：端点返回了非标准形状，Luker 的 normalizeResponse 无法拆包
+ *      —— 错误码 `json_schema_violation`
+ *      这类情况里请求是成功的，但响应既不是字符串也不是标准 chat-completion
+ *      对象（自建端点/中转很常见），所以同样应当降级。
+ *
+ * 优先用错误码判定（`GenerateTaskError.code` 是稳定契约），字符串匹配只作兜底。
  */
 export function looksLikeSchemaUnsupported(err) {
+    const code = String(err?.code ?? '').trim();
+    if (code === 'json_schema_violation') {
+        return true;
+    }
+
     const text = [err?.message, err?.cause?.message, err?.details]
         .map((value) => String(value ?? ''))
         .join(' ');
 
-    if (/rate.?limit|429|unauthor|401|forbidden|403/i.test(text)) {
+    // 限流 / 鉴权类错误不该白重试
+    if (/rate.?limit|\b429\b|unauthor|\b401\b|forbidden|\b403\b/i.test(text)) {
         return false;
     }
-    return /json_schema|json schema|response_format|structured output/i.test(text);
+    return /json_schema|json schema|response_format|structured output|jsonSchema response/i.test(text);
 }
 
 function now() {

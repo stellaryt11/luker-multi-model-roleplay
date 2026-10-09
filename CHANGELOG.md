@@ -123,3 +123,36 @@
 
 - 新增 3 个用例：jsonSchema 载荷契约形状（防回归）、降级重试路径、
   非 schema 错误不重试。总计 **63 个用例全部通过**。
+
+## [0.2.2] — 未发布
+
+### 修复
+
+- **响应阶段的结构化输出失败现在也会降级**。0.2.1 修好请求格式后暴露出下一个
+  问题：部分端点/中转在**响应**阶段返回非标准形状，而 Luker 的
+  `normalizeResponse` 在 jsonSchema 模式下只接受两种形状（JSON 字符串，或标准
+  chat-completion 对象），其它形状会抛：
+
+  ```
+  json_schema_violation: jsonSchema response: unrecognized shape
+  (expected string or chat-completion object)
+  ```
+
+  请求本身是成功的，只是无法拆包 —— 因此整回合回滚过于苛刻。现在同样会
+  自动去掉结构约束重试一次。
+- 降级判定改为**优先使用错误码**（`GenerateTaskError.code === 'json_schema_violation'`），
+  字符串匹配仅作兜底；限流（429）/鉴权（401/403）依旧不会被误判为可降级错误。
+- 降级日志带上错误码与原始信息，便于定位是请求侧还是响应侧的问题。
+
+### 新增
+
+- 设置项 `useJsonSchema`（默认开）：可彻底关闭结构化输出请求。
+  若端点稳定不支持，关掉它比每回合多一次失败往返更划算 ——
+  前三层的任务提示词里本就有「严格返回 JSON」约束，配合容错解析
+  （可处理 ```json 围栏与前后废话）足以兜底。
+
+### 测试
+
+- 新增 3 个用例：响应阶段降级路径、关闭开关后完全不传 schema、
+  `looksLikeSchemaUnsupported` 的判定边界（含 429/401/403 不误判）。
+  总计 **66 个用例全部通过**。

@@ -68,6 +68,14 @@ export const DEFAULT_SETTINGS = {
     styleAnchorEnabled: true,
 
     // ── 健壮性 ──
+    /**
+     * 是否向端点请求结构化输出（response_format.json_schema）。
+     *
+     * 开启后前三层会得到更稳定的 JSON；但不少自建端点/中转不支持它，
+     * 此时插件会自动去掉结构约束重试一次（多一次往返）。
+     * 如果你的端点稳定报错，直接关掉这个开关更划算。
+     */
+    useJsonSchema: true,
     /** 渲染结果疑似被阉割时自动重试一次 */
     retryOnDegenerate: true,
     /** 基础请求超时（毫秒），0 = 不额外限制 */

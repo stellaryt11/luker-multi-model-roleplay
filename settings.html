@@ -149,6 +149,17 @@
                     <input type="checkbox" data-setting="retryOnDegenerate">
                     <span>渲染结果疑似被网关阉割时自动重试一次</span>
                 </label>
+                <label class="checkbox_label mmrp-row">
+                    <input type="checkbox" data-setting="useJsonSchema">
+                    <span>
+                        向端点请求结构化输出（response_format.json_schema）<br>
+                        <span class="mmrp-subhint">
+                            开启后前三层的 JSON 更稳定。但不少自建端点/中转不支持它，
+                            此时插件会自动去掉结构约束重试一次（多一次往返）。
+                            若你的端点总是报结构化输出相关的错，直接关掉更划算。
+                        </span>
+                    </span>
+                </label>
             </div>
 
             <div class="mmrp-section">
