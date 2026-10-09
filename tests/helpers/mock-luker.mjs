@@ -92,6 +92,7 @@ export function createMockContext(config = {}) {
     // 允许按调用序号给出不同的渲染输出（用于验证重试）
     const renderSequence = config.renderSequence ?? null;
     let renderCallIndex = 0;
+    const schemaErrorCount = {};
 
     function identify(systemPrompt) {
         const text = String(systemPrompt ?? '');
@@ -121,6 +122,12 @@ export function createMockContext(config = {}) {
         }
         if (config.failOn === kind) {
             throw new Error(`mock failure in ${kind}`);
+        }
+        // 模拟「端点不支持结构化输出」：该层首次调用报 schema 错误
+        if (config.schemaErrorOn === kind && (schemaErrorCount[kind] = (schemaErrorCount[kind] ?? 0) + 1) === 1) {
+            throw new Error(
+                'Got response status 400 from : {"error":{"message":"response_format.json_schema.schema is required"}}',
+            );
         }
 
         const payload = resolvePayload(kind);

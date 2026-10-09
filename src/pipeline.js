@@ -42,6 +42,7 @@ import {
     renderActorCard,
     renderRenderPlan,
     renderSceneCard,
+    wrapJsonSchema,
 } from './prompts.js';
 
 import { resolvePrepPresetName } from './pure-preset.js';
@@ -95,7 +96,7 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
         systemPrompt: settings.sceneSystemOverride || SCENE_SYSTEM,
         taskTemplate: SCENE_TASK,
         values: { recent_chat: recentChat, last_user: lastUser },
-        jsonSchema: SCENE_SCHEMA,
+        jsonSchema: wrapJsonSchema('scene_fact_card', SCENE_SCHEMA),
         includeCharacterCard: false,
         worldInfoSource: 'chat',
         label: '场景层',
@@ -120,7 +121,7 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
         systemPrompt: settings.actorSystemOverride || ACTOR_SYSTEM,
         taskTemplate: ACTOR_TASK,
         values: { scene_card: sceneText, recent_chat: recentChat, last_user: lastUser },
-        jsonSchema: ACTOR_SCHEMA,
+        jsonSchema: wrapJsonSchema('character_will', ACTOR_SCHEMA),
         includeCharacterCard: true,
         worldInfoSource: 'chat',
         label: '人物层',
@@ -155,7 +156,7 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
             last_user: lastUser,
             style_anchor: styleAnchor || '（本次没有可用的上文，正常开篇）',
         },
-        jsonSchema: MERGE_SCHEMA,
+        jsonSchema: wrapJsonSchema('render_plan', MERGE_SCHEMA),
         includeCharacterCard: false,
         worldInfoSource: 'none',
         label: '整合层',
@@ -374,12 +375,34 @@ async function callLayer(ctx, params) {
         // 只有引用自定义连接时才注入 resolver；走 Connection Profile 的调用
         // 保持与之前完全一致，不依赖任何半私有接口。
         const injected = buildInjectionArgs(ctx, settings, apiPresetName);
-        const result = await ctx.generateTask(request, injected);
-        logDebug(`${label} 完成`, {
-            textLength: String(result?.assistantText ?? '').length,
-            usage: result?.usage ?? null,
-        });
-        return result ?? { assistantText: '' };
+
+        try {
+            const result = await ctx.generateTask(request, injected);
+            logDebug(`${label} 完成`, {
+                textLength: String(result?.assistantText ?? '').length,
+                usage: result?.usage ?? null,
+            });
+            return result ?? { assistantText: '' };
+        } catch (err) {
+            if (isAbort(err, abortSignal)) throw err;
+
+            // 不少自建端点 / 中转不支持 response_format.json_schema。
+            // 没必要因此整轮失败 —— 前三层的 taskMessages 里本来就写了
+            // "严格返回 JSON"，去掉 schema 重试一次通常仍能得到合法 JSON。
+            if (!request.jsonSchema || !looksLikeSchemaUnsupported(err)) {
+                throw err;
+            }
+
+            logWarn(`${label} 的端点不支持 jsonSchema，去掉结构约束重试一次`);
+            const fallbackRequest = { ...request };
+            delete fallbackRequest.jsonSchema;
+
+            const result = await ctx.generateTask(fallbackRequest, injected);
+            logDebug(`${label} 完成（已降级，无结构约束）`, {
+                textLength: String(result?.assistantText ?? '').length,
+            });
+            return result ?? { assistantText: '' };
+        }
     } finally {
         cleanup();
     }
@@ -422,6 +445,23 @@ export function isAbort(err, abortSignal) {
     if (abortSignal?.aborted) return true;
     const name = String(err?.name ?? '');
     return name === 'AbortError' || name === 'TimeoutError';
+}
+
+/**
+ * 判断错误是否指向「端点不支持结构化输出」。
+ *
+ * 上游的报错措辞各式各样，这里只认与 schema / response_format 直接相关的
+ * 关键词，避免把普通的限流、鉴权失败误判成可降级错误而白白重试。
+ */
+export function looksLikeSchemaUnsupported(err) {
+    const text = [err?.message, err?.cause?.message, err?.details]
+        .map((value) => String(value ?? ''))
+        .join(' ');
+
+    if (/rate.?limit|429|unauthor|401|forbidden|403/i.test(text)) {
+        return false;
+    }
+    return /json_schema|json schema|response_format|structured output/i.test(text);
 }
 
 function now() {

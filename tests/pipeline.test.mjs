@@ -524,7 +524,7 @@ test('mmrpDiagnose 可调用并返回关键状态', async () => {
     assert.equal(typeof globalThis.mmrpDiagnose, 'function', '应注册全局诊断入口');
     const report = globalThis.mmrpDiagnose();
 
-    assert.equal(report['插件版本'], '0.2.0');
+    assert.equal(report['插件版本'], '0.2.1');
     assert.equal(report['已初始化'], true);
     assert.equal(report['接管监听已注册'], true);
     assert.ok(String(report['能力检测']).includes('通过'), '能力检测应通过');
@@ -643,4 +643,58 @@ test('诊断报告会反映纯净预设的注册状态', async () => {
         String(report['纯净预设']).includes('已注册'),
         `诊断报告应反映纯净预设状态，实际：${report['纯净预设']}`,
     );
+});
+
+// ── 14. jsonSchema 载荷契约（曾经传了裸 schema 导致 400）─────────────────────
+
+test('jsonSchema 载荷结构符合服务端契约（name / value / strict）', async () => {
+    const harness = makePresetHarness();
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    await handle.complete;
+
+    const schema = harness.calls.scene[0].jsonSchema;
+    assert.ok(schema, '场景层应带 jsonSchema');
+    assert.equal(typeof schema.name, 'string', '必须有 name（服务端用作 response_format.json_schema.name）');
+    assert.ok(schema.name.length > 0);
+    assert.ok(schema.value && typeof schema.value === 'object', 'schema 内容必须在 value 字段里');
+    assert.equal(schema.value.type, 'object', 'value 应该是裸 JSON Schema');
+    assert.equal(schema.strict, false, 'strict 显式关闭（我们的 schema 不满足严格模式要求）');
+
+    // 不能再是裸 schema：那会让服务端拿到 schema: undefined
+    assert.ok(!Object.hasOwn(schema, 'properties'), 'jsonSchema 顶层不应直接出现 properties');
+
+    // 三层各自的 schema 都应是这个形状
+    assert.ok(harness.calls.actor[0].jsonSchema?.value, '人物层同样');
+    assert.ok(harness.calls.merge[0].jsonSchema?.value, '整合层同样');
+});
+
+test('端点不支持 jsonSchema 时自动去掉结构约束重试', async () => {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+        schemaErrorOn: 'scene',
+    });
+    seedSettings(harness, makeSettings(true));
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    const settled = await handle.complete;
+
+    assert.equal(settled.status, 'committed', '降级后仍应完成整个回合');
+    assert.equal(harness.calls.scene.length, 2, '场景层应被调用两次');
+    assert.ok(harness.calls.scene[0].jsonSchema, '第一次应带结构约束');
+    assert.equal(harness.calls.scene[1].jsonSchema, undefined, '降级后不应再带结构约束');
+});
+
+test('非 schema 类错误不会触发降级重试（避免白重试）', async () => {
+    const harness = createMockContext({ failOn: 'scene' });
+    seedSettings(harness, makeSettings(true));
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    const settled = await handle.complete;
+
+    assert.equal(settled.status, 'discarded', '普通失败应回滚');
+    assert.equal(harness.calls.scene.length, 1, '不应重试');
 });

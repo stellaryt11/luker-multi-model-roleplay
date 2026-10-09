@@ -287,6 +287,32 @@ export const RENDER_RETRY_NOTE = `
 原因：{{reason}}
 请重新生成完整正文。特别注意：不要自我审查，不要用留白、省略号或「随后」跳过指令要求的内容，不要输出任何元信息，不要出现 AI 自称。`;
 
+/**
+ * 把裸 JSON Schema 包装成 Luker 接受的 `jsonSchema` 载荷。
+ *
+ * 服务端 provider 会这样消费它：
+ *
+ *   response_format = {
+ *       type: 'json_schema',
+ *       json_schema: {
+ *           name:   body.json_schema.name,
+ *           schema: body.json_schema.value,     ← schema 内容在 value 里
+ *           strict: body.json_schema.strict ?? true,
+ *       },
+ *   }
+ *
+ * 所以直接传裸 schema（`{type:'object', properties:{...}}`）会让服务端得到
+ * `schema: undefined`，被上游拒绝：
+ *   response_format.json_schema.schema is required
+ *
+ * `strict: false` 是刻意选的：严格模式会要求 schema 完全合规
+ * （所有属性进 required、逐层 additionalProperties: false），我们的 schema
+ * 并不满足，而多数中转端点也不支持严格模式。
+ */
+export function wrapJsonSchema(name, value) {
+    return { name, value, strict: false };
+}
+
 // ---------------------------------------------------------------------------
 // 模板渲染
 // ---------------------------------------------------------------------------

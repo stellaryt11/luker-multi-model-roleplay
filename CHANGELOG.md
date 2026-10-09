@@ -96,3 +96,30 @@
 
 - 新增 25 个用例：纯净预设 7 个、自定义连接 19 个（含 resolver 委托行为、
   密钥不落盘的断言）、设置面板一致性 6 个。总计 **60 个用例全部通过**。
+
+## [0.2.1] — 未发布
+
+### 修复（阻断性）
+
+- **`jsonSchema` 载荷结构错误，导致前三层必然 400、插件完全不可用**。
+  原实现按文档传了裸 JSON Schema，但服务端 provider 的实际契约是
+  `{ name, value, strict }` —— schema 内容必须放在 `value` 字段里，
+  provider 会组装成 `response_format.json_schema.schema`。
+  传裸 schema 会让服务端拿到 `schema: undefined`，被上游拒绝：
+
+  ```
+  response_format.json_schema.schema is required
+  ```
+
+  后果是流水线在第一层就抛错并回滚，用户看到的是「多模型流水线失败，已回滚本回合」。
+  现已改为 `wrapJsonSchema(name, value)` 统一包装，并显式 `strict: false`
+  （我们的 schema 不满足 OpenAI 严格模式要求，多数中转也不支持）。
+
+- **新增结构约束降级**：自建端点/中转不支持 `response_format` 时，自动去掉
+  jsonSchema 重试一次。前三层的任务提示词里本就写了「严格返回 JSON」，
+  足以兜底。限流（429）、鉴权（401/403）类错误不会被误判为可降级错误。
+
+### 测试
+
+- 新增 3 个用例：jsonSchema 载荷契约形状（防回归）、降级重试路径、
+  非 schema 错误不重试。总计 **63 个用例全部通过**。
