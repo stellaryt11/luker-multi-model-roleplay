@@ -172,6 +172,11 @@ export function createMockContext(config = {}) {
 
     const ctx = {
         extensionSettings: {},
+        // 合成预设需要的预设表（纯内存）
+        openai: {
+            settings: [],
+            settingNames: {},
+        },
         chat: config.chat ?? [
             { is_user: true, mes: '你回来了？' },
             { is_user: false, mes: '嗯。她站在门口，把湿透的伞靠在墙边。', name: '林晚' },
@@ -202,6 +207,9 @@ export function createMockContext(config = {}) {
         ctx,
         handles,
         calls,
+        /** 预设表（供断言合成预设是否注册成功） */
+        openaiSettings: ctx.openai.settings,
+        openaiSettingNames: ctx.openai.settingNames,
         renderCallCount: () => renderCallIndex,
         /** 触发一次接管分发，返回事件载荷（便于断言 takeoverHandle 是否被填充） */
         dispatch(eventData) {
@@ -236,6 +244,12 @@ function splitIntoChunks(text, size = 12) {
 /** 安装全局 Luker 并导入插件入口（每次调用都拿全新模块实例）。 */
 export async function loadPluginWithContext(ctx, { cacheBust = '' } = {}) {
     globalThis.Luker = { getContext: () => ctx };
+
+    // 纯净预设的注册状态是模块级的，测试间需要重置，否则第二个用例会因
+    // 短路而沿用上一个 ctx 的注册结果。
+    const purePreset = await import('../../src/pure-preset.js');
+    purePreset.__resetPurePresetState();
+
     const version = cacheBust || String(Math.random());
     const mod = await import(`../../index.js?v=${version}`);
     mod.init();

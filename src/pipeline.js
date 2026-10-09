@@ -44,6 +44,9 @@ import {
     renderSceneCard,
 } from './prompts.js';
 
+import { resolvePrepPresetName } from './pure-preset.js';
+import { buildInjectionArgs } from './custom-api.js';
+
 const REASONING_CAP = 2000;
 
 /**
@@ -84,10 +87,11 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
     setProgress('*正在构建场景事实…*');
     const sceneStart = now();
     const sceneResult = await callLayer(ctx, {
+        settings,
         abortSignal: eventData.abortSignal,
         timeoutMs: settings.requestTimeoutMs,
         apiPresetName: settings.sceneApiProfile,
-        llmPresetName: settings.scenePreset,
+        llmPresetName: resolvePrepPresetName(settings, settings.scenePreset),
         systemPrompt: settings.sceneSystemOverride || SCENE_SYSTEM,
         taskTemplate: SCENE_TASK,
         values: { recent_chat: recentChat, last_user: lastUser },
@@ -108,10 +112,11 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
     setProgress('*正在裁决角色反应…*');
     const actorStart = now();
     const actorResult = await callLayer(ctx, {
+        settings,
         abortSignal: eventData.abortSignal,
         timeoutMs: settings.requestTimeoutMs,
         apiPresetName: settings.actorApiProfile,
-        llmPresetName: settings.actorPreset,
+        llmPresetName: resolvePrepPresetName(settings, settings.actorPreset),
         systemPrompt: settings.actorSystemOverride || ACTOR_SYSTEM,
         taskTemplate: ACTOR_TASK,
         values: { scene_card: sceneText, recent_chat: recentChat, last_user: lastUser },
@@ -136,10 +141,11 @@ export async function runPipeline({ ctx, eventData, handle, settings }) {
     setProgress('*正在整合渲染指令…*');
     const mergeStart = now();
     const mergeResult = await callLayer(ctx, {
+        settings,
         abortSignal: eventData.abortSignal,
         timeoutMs: settings.requestTimeoutMs,
         apiPresetName: settings.mergeApiProfile,
-        llmPresetName: settings.mergePreset,
+        llmPresetName: resolvePrepPresetName(settings, settings.mergePreset),
         systemPrompt: settings.mergeSystemOverride || MERGE_SYSTEM,
         taskTemplate: MERGE_TASK,
         values: {
@@ -294,7 +300,8 @@ async function renderOnce({
     // 流式：边生成边渲染，这是用户唯一能感受到"正在打字"的一层。
     if (typeof ctx.generateTaskStream === 'function') {
         try {
-            const { stream } = ctx.generateTaskStream(common);
+            const injected = buildInjectionArgs(ctx, settings, route.profile);
+            const { stream } = ctx.generateTaskStream(common, injected);
             return await pipeStreamIntoHandle(handle, stream, { base });
         } catch (err) {
             if (isAbort(err, eventData.abortSignal)) throw err;
@@ -304,6 +311,7 @@ async function renderOnce({
 
     const result = await callLayer(ctx, {
         ...common,
+        settings,
         systemPrompt,
         taskTemplate: taskContent,
         values: {},
@@ -339,6 +347,7 @@ async function callLayer(ctx, params) {
         label,
         prebuiltUserContent,
         rawTemplate,
+        settings,
     } = params;
 
     const userContent = rawTemplate ? taskTemplate : fillTemplate(taskTemplate, values);
@@ -362,7 +371,10 @@ async function callLayer(ctx, params) {
     request.abortSignal = signal;
 
     try {
-        const result = await ctx.generateTask(request);
+        // 只有引用自定义连接时才注入 resolver；走 Connection Profile 的调用
+        // 保持与之前完全一致，不依赖任何半私有接口。
+        const injected = buildInjectionArgs(ctx, settings, apiPresetName);
+        const result = await ctx.generateTask(request, injected);
         logDebug(`${label} 完成`, {
             textLength: String(result?.assistantText ?? '').length,
             usage: result?.usage ?? null,

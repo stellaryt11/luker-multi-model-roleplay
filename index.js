@@ -16,6 +16,7 @@
  */
 
 import { runPipeline, isAbort } from './src/pipeline.js';
+import { ensurePurePresetRegistered, isPurePresetReady } from './src/pure-preset.js';
 import { getSettings, mountSettingsPanel } from './src/settings.js';
 import {
     MODULE_NAME,
@@ -32,7 +33,7 @@ import {
 let registered = false;
 let initialized = false;
 
-const PLUGIN_VERSION = '0.1.2';
+const PLUGIN_VERSION = '0.2.0';
 
 /**
  * activate 钩子（manifest.hooks.activate）。
@@ -71,6 +72,7 @@ export function init() {
     }
 
     registerTakeover();
+    ensurePurePresetRegistered(probe.ctx);
     installDiagnostics();
     scheduleSettingsPanel();
     console.log(`[${MODULE_NAME}] v${PLUGIN_VERSION} 已就绪`);
@@ -102,6 +104,7 @@ function installDiagnostics() {
             接管监听已注册: registered,
             运行环境: ctx ? 'Luker（context 可用）' : '非 Luker / 无 context',
             能力检测: probe.ok ? '通过' : `缺少：${probe.missing.join('、')}`,
+            纯净预设: isPurePresetReady() ? '已注册（准备层不会继承 RP 预设）' : '未注册（准备层会跟随当前预设）',
             设置面板DOM: count('#mmrp_settings_block') ? '已挂载（面板存在）' : '未找到（挂载失败）',
             可用挂载容器: {
                 '#extensions_settings': count('#extensions_settings'),

@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMockContext, loadPluginWithContext } from './helpers/mock-luker.mjs';
+import { PURE_PRESET_NAME } from '../src/pure-preset.js';
 
 // ── 固定素材 ────────────────────────────────────────────────────────────────
 
@@ -523,10 +524,123 @@ test('mmrpDiagnose 可调用并返回关键状态', async () => {
     assert.equal(typeof globalThis.mmrpDiagnose, 'function', '应注册全局诊断入口');
     const report = globalThis.mmrpDiagnose();
 
-    assert.equal(report['插件版本'], '0.1.2');
+    assert.equal(report['插件版本'], '0.2.0');
     assert.equal(report['已初始化'], true);
     assert.equal(report['接管监听已注册'], true);
     assert.ok(String(report['能力检测']).includes('通过'), '能力检测应通过');
     // 无 jQuery 的测试环境里不应误报成「已挂载」
     assert.ok(String(report['设置面板DOM']).includes('未找到'), '无 DOM 时应如实报告');
+});
+
+// ── 13. 纯净预设（防止 RP 预设污染准备层）────────────────────────────────────
+
+/** 复用同一套上游响应，只关心预设路由。 */
+function makePresetHarness(settingsOverrides = {}) {
+    const harness = createMockContext({
+        responses: { scene: SCENE_JSON, actor: ACTOR_JSON(0), merge: MERGE_JSON(0), render: LONG_PROSE },
+    });
+    seedSettings(harness, makeSettings(settingsOverrides));
+    return harness;
+}
+
+test('纯净预设被注册进 Luker 预设表，且带 chatHistory 插入点', async () => {
+    const harness = makePresetHarness();
+    await loadPluginWithContext(harness.ctx);
+
+    const index = harness.openaiSettingNames[PURE_PRESET_NAME];
+    assert.ok(Number.isInteger(index), '应把纯净预设名登记进 settingNames');
+
+    const body = harness.openaiSettings[index];
+    assert.ok(body && typeof body === 'object', '应有预设 body');
+    assert.ok(Array.isArray(body.prompts), '应有 prompts 数组');
+
+    // chatHistory marker 必须有 —— 插件自己的 taskMessages 就插在这个位置
+    assert.ok(
+        body.prompts.some((p) => p.identifier === 'chatHistory'),
+        'prompts 里必须含 chatHistory marker',
+    );
+    const order = body.prompt_order?.[0]?.order ?? [];
+    assert.ok(
+        order.some((o) => o.identifier === 'chatHistory'),
+        'prompt_order 里也必须启用 chatHistory',
+    );
+
+    // 纯净的含义：不含任何实质性的固定提示词（除了一条极简的 main）
+    const withContent = body.prompts.filter((p) => !p.marker && String(p.content ?? '').trim());
+    assert.deepEqual(
+        withContent.map((p) => p.identifier),
+        ['main'],
+        '除 main 外不应携带任何固定提示词内容',
+    );
+});
+
+test('准备层使用纯净预设，渲染层仍跟随当前预设', async () => {
+    const harness = makePresetHarness();
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    await handle.complete;
+
+    assert.equal(harness.calls.scene[0].llmPresetName, PURE_PRESET_NAME, '场景层应用纯净预设');
+    assert.equal(harness.calls.actor[0].llmPresetName, PURE_PRESET_NAME, '人物层应用纯净预设');
+    assert.equal(harness.calls.merge[0].llmPresetName, PURE_PRESET_NAME, '整合层应用纯净预设');
+    assert.equal(harness.calls.render[0].llmPresetName, '', '渲染层应跟随当前激活的预设（即用户的 RP 预设）');
+});
+
+test('关闭纯净预设开关后，准备层回退为跟随当前预设', async () => {
+    const harness = makePresetHarness({ prepLayersUsePurePreset: false });
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    await handle.complete;
+
+    assert.equal(harness.calls.scene[0].llmPresetName, '', '关闭后应回退');
+    assert.equal(harness.calls.actor[0].llmPresetName, '');
+    assert.equal(harness.calls.merge[0].llmPresetName, '');
+});
+
+test('用户显式指定的预设优先于纯净预设', async () => {
+    const harness = makePresetHarness({ scenePreset: 'my-prep-preset' });
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    await handle.complete;
+
+    assert.equal(harness.calls.scene[0].llmPresetName, 'my-prep-preset', '显式指定应优先');
+    assert.equal(harness.calls.actor[0].llmPresetName, PURE_PRESET_NAME, '未指定的层仍用纯净预设');
+});
+
+test('纯净预设注册幂等，重复 init 不会重复推入', async () => {
+    const harness = makePresetHarness();
+    const mod = await loadPluginWithContext(harness.ctx);
+
+    mod.init();
+    mod.init();
+
+    const presetBodies = harness.openaiSettings.filter((b) => b && Array.isArray(b.prompts));
+    assert.equal(presetBodies.length, 1, '预设表里只应有一份纯净预设');
+});
+
+test('Luker 未暴露预设表时安全降级，不崩且准备层回退', async () => {
+    const harness = makePresetHarness();
+    delete harness.ctx.openai;
+
+    await loadPluginWithContext(harness.ctx);
+
+    const handle = harness.dispatch({}).takeoverHandle;
+    await handle.complete;
+
+    assert.equal(harness.calls.scene[0].llmPresetName, '', '无法注册时应安全回退');
+    assert.equal(harness.handles[0]._state.status, 'committed', '整体流程仍应跑通');
+});
+
+test('诊断报告会反映纯净预设的注册状态', async () => {
+    const harness = makePresetHarness();
+    await loadPluginWithContext(harness.ctx);
+
+    const report = globalThis.mmrpDiagnose();
+    assert.ok(
+        String(report['纯净预设']).includes('已注册'),
+        `诊断报告应反映纯净预设状态，实际：${report['纯净预设']}`,
+    );
 });

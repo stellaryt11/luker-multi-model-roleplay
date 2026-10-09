@@ -15,9 +15,38 @@
             </label>
 
             <label class="checkbox_label mmrp-row">
+                <input type="checkbox" data-setting="prepLayersUsePurePreset">
+                <span>
+                    准备层（场景 / 人物 / 整合）使用<b>内置纯净预设</b>（强烈建议开启）<br>
+                    <span class="mmrp-subhint">
+                        开启后，这三层只注入结构性内容（角色卡 / 世界书 / 聊天历史），
+                        不会吃下你 RP 预设里的越狱、文风、字数要求、NSFW 指导等固定提示词。
+                        <b>关闭会使三层被完整 RP 预设污染</b>（可能上万字），导致场景层开始写散文、
+                        整合层的 JSON 指令与文风指令打架。渲染层不受此开关影响，始终使用你的完整预设。
+                    </span>
+                </span>
+            </label>
+
+            <label class="checkbox_label mmrp-row">
                 <input type="checkbox" data-setting="debug">
                 <span>调试日志（输出到控制台）</span>
             </label>
+
+            <div class="mmrp-section">
+                <div class="mmrp-section-title">自定义 API 连接（可选）</div>
+                <div class="mmrp-hint">
+                    与 Luker 的 Connection Profile <b>二选一</b>使用：已经建好 Profile 的话，这里不用管，直接在下面各层下拉里选。<br>
+                    需要“自建端点 + 专属密钥 + 单独选模型”时用这里。密钥会写进 Luker 的服务端 secrets，
+                    <b>不会存到插件设置，也不会回显</b>。填完端点和密钥后点“拉取模型”即可选。
+                </div>
+                <div id="mmrp_custom_api_list" class="mmrp-capi-list"></div>
+                <div class="mmrp-actions">
+                    <div id="mmrp_add_custom_api" class="menu_button menu_button_icon">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>新增自定义连接</span>
+                    </div>
+                </div>
+            </div>
 
             <div class="mmrp-section">
                 <div class="mmrp-section-title">① 场景层 · 世界的事实</div>
@@ -26,8 +55,8 @@
                     <label>API 连接配置
                         <select class="text_pole mmrp-profile-select" data-setting="sceneApiProfile"></select>
                     </label>
-                    <label>Chat 补全预设（可留空）
-                        <input type="text" class="text_pole" data-setting="scenePreset" placeholder="例如：low-temp">
+                    <label>Chat 补全预设（留空 = 内置纯净预设，推荐）
+                        <input type="text" class="text_pole" data-setting="scenePreset" placeholder="留空即可">
                     </label>
                 </div>
             </div>
@@ -39,8 +68,8 @@
                     <label>API 连接配置
                         <select class="text_pole mmrp-profile-select" data-setting="actorApiProfile"></select>
                     </label>
-                    <label>Chat 补全预设（可留空）
-                        <input type="text" class="text_pole" data-setting="actorPreset" placeholder="例如：rp-main">
+                    <label>Chat 补全预设（留空 = 内置纯净预设，推荐）
+                        <input type="text" class="text_pole" data-setting="actorPreset" placeholder="留空即可">
                     </label>
                 </div>
             </div>
@@ -52,8 +81,8 @@
                     <label>API 连接配置
                         <select class="text_pole mmrp-profile-select" data-setting="mergeApiProfile"></select>
                     </label>
-                    <label>Chat 补全预设（可留空）
-                        <input type="text" class="text_pole" data-setting="mergePreset" placeholder="例如：struct-json">
+                    <label>Chat 补全预设（留空 = 内置纯净预设，推荐）
+                        <input type="text" class="text_pole" data-setting="mergePreset" placeholder="留空即可">
                     </label>
                 </div>
             </div>
@@ -68,14 +97,14 @@
                     <label>低强度渲染 · API 连接配置
                         <select class="text_pole mmrp-profile-select" data-setting="renderLightApiProfile"></select>
                     </label>
-                    <label>低强度 · 预设
-                        <input type="text" class="text_pole" data-setting="renderLightPreset" placeholder="可留空">
+                    <label>低强度 · 预设（留空 = 你当前激活的 RP 预设）
+                        <input type="text" class="text_pole" data-setting="renderLightPreset" placeholder="留空即可">
                     </label>
                     <label>高强度渲染 · API 连接配置
                         <select class="text_pole mmrp-profile-select" data-setting="renderHeavyApiProfile"></select>
                     </label>
-                    <label>高强度 · 预设
-                        <input type="text" class="text_pole" data-setting="renderHeavyPreset" placeholder="可留空">
+                    <label>高强度 · 预设（留空 = 你当前激活的 RP 预设）
+                        <input type="text" class="text_pole" data-setting="renderHeavyPreset" placeholder="留空即可">
                     </label>
                 </div>
                 <div class="mmrp-grid">

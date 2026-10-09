@@ -55,6 +55,15 @@
     font-size: 0.9em;
 }
 
+.mmrp-settings .mmrp-subhint {
+    display: block;
+    margin-top: 4px;
+    opacity: 0.72;
+    font-size: 0.86em;
+    line-height: 1.5;
+    font-weight: normal;
+}
+
 .mmrp-settings .mmrp-inline-check {
     flex-direction: row;
     align-items: center;
@@ -91,4 +100,90 @@
     opacity: 0.65;
     font-size: 0.8em;
     line-height: 1.5;
+}
+
+/* ── 自定义 API 连接 ───────────────────────────────────────────────── */
+
+.mmrp-settings .mmrp-capi-empty {
+    opacity: 0.65;
+    font-size: 0.85em;
+    line-height: 1.5;
+    padding: 8px 0;
+}
+
+.mmrp-settings .mmrp-capi-card {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 8px 0;
+    background: color-mix(in srgb, var(--SmartThemeBodyColor) 3%, transparent);
+}
+
+.mmrp-settings .mmrp-capi-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.mmrp-settings .mmrp-capi-name {
+    flex: 1;
+    font-weight: bold;
+}
+
+.mmrp-settings .mmrp-capi-del {
+    flex: 0 0 auto;
+    opacity: 0.75;
+}
+
+.mmrp-settings .mmrp-capi-del:hover {
+    opacity: 1;
+    color: var(--fullred, #d33);
+}
+
+.mmrp-settings .mmrp-capi-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0;
+    font-size: 0.88em;
+}
+
+.mmrp-settings .mmrp-capi-inline {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.mmrp-settings .mmrp-capi-inline > input {
+    flex: 1;
+    min-width: 0;
+}
+
+.mmrp-settings .mmrp-capi-action {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.mmrp-settings .mmrp-capi-model-select {
+    width: 100%;
+    margin-top: 6px;
+}
+
+.mmrp-settings .mmrp-capi-status {
+    margin-top: 6px;
+    font-size: 0.82em;
+    line-height: 1.45;
+    min-height: 1.2em;
+    opacity: 0.8;
+}
+
+.mmrp-settings .mmrp-capi-status.mmrp-capi-ok {
+    color: var(--active, #6a9) ;
+    opacity: 1;
+}
+
+.mmrp-settings .mmrp-capi-status.mmrp-capi-error {
+    color: var(--fullred, #d33);
+    opacity: 1;
 }
