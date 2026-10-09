@@ -1,0 +1,12 @@
+# 统一使用 LF：Luker / SillyTavern 大量部署在 Linux 与 Docker 上，
+# CRLF 会污染 diff 并可能影响脚本执行。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
